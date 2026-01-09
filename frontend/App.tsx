@@ -12,7 +12,7 @@ import { useSupabaseSession } from './services/useSupabaseSession';
 import { supabase } from './services/supabaseClient';
 import {
   MapPin, Settings2, Shuffle, ArrowRight, Share2, Copy,
-  ChefHat, CheckCircle2, History, Home, User, Utensils, LogOut, Search, X, ArrowUp,
+  ChefHat, CheckCircle2, Home, User, Utensils, LogOut, Search, X, ArrowUp,
   Plus, Trash2, Navigation, Star
 } from 'lucide-react';
 
@@ -49,6 +49,7 @@ export default function App() {
   const { user: authedUser, loading: authLoading } = useSupabaseSession();
   const [toastMsg, setToastMsg] = useState('');
   const [nearbyShops, setNearbyShops] = useState<Shop[]>([]);
+  const [todayRecommendations, setTodayRecommendations] = useState<Shop[]>([]);
   const [locationName, setLocationName] = useState(DEFAULT_LOCATION.name);
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -191,6 +192,36 @@ export default function App() {
   useEffect(() => {
     searchQueryRef.current = searchQuery;
   }, [searchQuery]);
+
+  // 生成或获取今日推荐
+  const getTodayRecommendations = useCallback(() => {
+    const today = new Date().toDateString(); // 获取今天的日期作为缓存 key
+    const cacheKey = `today_recommendations_${today}`;
+    const cached = localStorage.getItem(cacheKey);
+
+    if (cached) {
+      try {
+        const recommendations = JSON.parse(cached);
+        // 验证缓存的数据是否完整
+        if (Array.isArray(recommendations) && recommendations.length === 5) {
+          setTodayRecommendations(recommendations);
+          return;
+        }
+      } catch (e) {
+        console.error('Failed to parse cached recommendations:', e);
+      }
+    }
+
+    // 如果没有缓存或缓存无效，生成新的推荐
+    if (nearbyShops.length > 0) {
+      const shuffled = [...nearbyShops].sort(() => 0.5 - Math.random());
+      const recommendations = shuffled.slice(0, 5);
+
+      // 存入缓存
+      localStorage.setItem(cacheKey, JSON.stringify(recommendations));
+      setTodayRecommendations(recommendations);
+    }
+  }, [nearbyShops]);
 
   // 加载餐厅数据的函数
   const loadShops = useCallback(async (resetPage = false) => {
@@ -406,6 +437,13 @@ export default function App() {
     }, 300);
     return () => clearTimeout(timer);
   }, [searchQuery, authLoading, authedUser]);
+
+  // 4. 附近餐厅加载完成后生成今日推荐
+  useEffect(() => {
+    if (nearbyShops.length > 0) {
+      getTodayRecommendations();
+    }
+  }, [nearbyShops, getTodayRecommendations]);
 
   // 加载用户保存的位置
   useEffect(() => {
@@ -687,6 +725,22 @@ export default function App() {
     }
   };
 
+  const handleClearVotes = async () => {
+    if (!currentRoomCode) return
+    try {
+      await api.clearVotes(currentRoomCode)
+      showToast('投票已清除')
+
+      // 重新加载房间数据
+      const updatedRoom = await api.getRoom(currentRoomCode)
+      if (updatedRoom) {
+        setRoomData(updatedRoom)
+      }
+    } catch (error: any) {
+      showToast(error?.message || '清除投票失败')
+    }
+  };
+
   const handleRandomize = () => {
     const shuffled = [...nearbyShops].sort(() => 0.5 - Math.random());
     setRandomCandidates(shuffled.slice(0, 5));
@@ -707,9 +761,20 @@ export default function App() {
   };
 
   // 进入房间
-  const handleEnterRoom = (roomCode: string) => {
+  const handleEnterRoom = async (roomCode: string) => {
     trackBusiness.roomEnter(roomCode)
-    window.location.hash = `#room/${roomCode}`
+
+    // 如果已经在当前房间，手动刷新数据
+    if (currentRoomCode === roomCode) {
+      const room = await api.getRoom(roomCode)
+      if (room) {
+        setRoomData(room)
+      }
+      // 确保切换到投票 tab
+      setActiveTab('vote')
+    } else {
+      window.location.hash = `#room/${roomCode}`
+    }
   };
 
   const handleVote = async (shopId: string) => {
@@ -841,7 +906,9 @@ export default function App() {
          {filteredShops.length > 0 ? (
            <>
              {filteredShops.map(shop => (
-               <ShopCard key={shop.id} shop={shop} mode="display" />
+               <div key={shop.id} id={`shop-${shop.id}`}>
+                 <ShopCard shop={shop} mode="display" />
+               </div>
              ))}
              {/* 加载更多指示器 */}
              {loading && (
@@ -934,6 +1001,15 @@ export default function App() {
              <div className="flex justify-between items-center mb-2">
                <span className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded-full animate-pulse">进行中</span>
                <div className="flex items-center gap-2">
+                 {/* 清除投票按钮 - 仅创建者可见 */}
+                 {roomData.created_by === authedUser.id && totalVotes > 0 && (
+                   <button
+                     onClick={handleClearVotes}
+                     className="text-xs text-orange-500 flex items-center gap-1 hover:text-orange-700 font-medium"
+                   >
+                     清除投票
+                   </button>
+                 )}
                  {/* 解散房间按钮 - 仅创建者可见 */}
                  {roomData.created_by === authedUser.id && (
                    <button
@@ -1441,15 +1517,66 @@ export default function App() {
           </div>
         </div>
 
-        {/* 历史记录 */}
+        {/* 今日推荐 */}
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
           <div className="p-4 border-b border-gray-50 flex items-center gap-2 font-bold text-gray-700">
-            <History size={18} className="text-gray-400" />
-            <span>历史记录</span>
+            <Shuffle size={18} className="text-orange-500" />
+            <span>今日推荐</span>
+            <span className="text-xs text-gray-400 font-normal ml-auto">每天随机 5 家</span>
           </div>
-          <div className="p-8 text-center text-gray-400 text-sm">
-            暂无历史记录
-          </div>
+          {todayRecommendations.length === 0 ? (
+            <div className="p-8 text-center text-gray-400 text-sm">
+              加载推荐中...
+            </div>
+          ) : (
+            <div className="divide-y divide-gray-50">
+              {todayRecommendations.map((shop) => (
+                <div
+                  key={shop.id}
+                  onClick={() => {
+                    setActiveTab('home')
+                    setTimeout(() => {
+                      document.getElementById(`shop-${shop.id}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+                    }, 100)
+                  }}
+                  className="p-3 hover:bg-orange-50 cursor-pointer transition-colors"
+                >
+                  <div className="flex items-center gap-3">
+                    <img
+                      src={shop.image_url}
+                      alt={shop.name}
+                      className="w-16 h-16 rounded-xl object-cover bg-gray-100"
+                    />
+                    <div className="flex-1 min-w-0">
+                      <div className="font-medium text-gray-800 truncate">{shop.name}</div>
+                      <div className="text-xs text-gray-500 mt-1 flex items-center gap-2">
+                        {shop.rating > 0 && (
+                          <span className="flex items-center gap-1">
+                            <Star size={10} className="text-yellow-500 fill-yellow-500" />
+                            {shop.rating.toFixed(1)}
+                          </span>
+                        )}
+                        {shop.avg_price > 0 && (
+                          <span>¥{Math.floor(shop.avg_price)}</span>
+                        )}
+                        <span className="text-orange-600">{Math.floor(shop.distance)}m</span>
+                      </div>
+                      {shop.tags && shop.tags.length > 0 && (
+                        <div className="flex flex-wrap gap-1 mt-1">
+                          {shop.tags.slice(0, 2).map((tag) => (
+                            <span key={tag} className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">
+                              {tag}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                    <ArrowRight size={16} className="text-gray-400" />
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* 添加位置弹窗 */}

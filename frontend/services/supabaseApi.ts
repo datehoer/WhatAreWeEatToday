@@ -513,6 +513,25 @@ export const api = {
   },
 
   /**
+   * 清除房间所有投票（仅创建者可以清除）
+   * @param roomCode 房间代码
+   */
+  clearVotes: async (roomCode: string): Promise<void> => {
+    const { data, error } = await supabase.rpc('clear_votes', {
+      room_code_param: roomCode
+    })
+
+    if (error) {
+      console.error('Error clearing votes:', error)
+      throw error
+    }
+
+    if (!data) {
+      throw new Error('清除投票失败')
+    }
+  },
+
+  /**
    * 获取当前用户创建的房间列表
    */
   getMyRooms: async (): Promise<any[]> => {

@@ -280,7 +280,7 @@ BEGIN
 END;
 $$;
 
--- 获取当前用户创建的活跃房间列表（前端“我的房间”）
+-- 获取所有活跃房间列表（前端"房间列表"）
 CREATE OR REPLACE FUNCTION get_my_rooms()
 RETURNS JSON
 LANGUAGE plpgsql
@@ -311,8 +311,8 @@ BEGIN
   FROM (
     SELECT *
     FROM vote_rooms
-    WHERE created_by = auth.uid()
-      AND is_active = true
+    WHERE is_active = true
+      AND (expires_at IS NULL OR expires_at > timezone('utc'::text, now()))
     ORDER BY created_at DESC
   ) vr;
 
@@ -345,6 +345,43 @@ BEGIN
   IF room_expires_at IS NOT NULL AND room_expires_at < timezone('utc'::text, now()) THEN
     RETURN FALSE;
   END IF;
+
+  RETURN TRUE;
+END;
+$$;
+
+-- 清除房间所有投票（仅创建者可操作）
+CREATE OR REPLACE FUNCTION clear_votes(room_code_param TEXT)
+RETURNS BOOLEAN
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  room_created_by UUID;
+BEGIN
+  IF NOT is_allowed_email() THEN
+    RAISE EXCEPTION 'not allowed' USING ERRCODE = '28000';
+  END IF;
+
+  -- 检查房间存在并获取创建者
+  SELECT created_by
+  INTO room_created_by
+  FROM vote_rooms
+  WHERE room_code = room_code_param;
+
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'room not found' USING ERRCODE = '42704';
+  END IF;
+
+  -- 仅创建者可清除投票
+  IF room_created_by != auth.uid() THEN
+    RAISE EXCEPTION 'only room creator can clear votes' USING ERRCODE = '42501';
+  END IF;
+
+  -- 删除该房间的所有投票记录
+  DELETE FROM vote_records
+  WHERE room_code = room_code_param;
 
   RETURN TRUE;
 END;
@@ -519,3 +556,4 @@ GRANT EXECUTE ON FUNCTION get_nearby_shops(float, float, int, int) TO authentica
 GRANT EXECUTE ON FUNCTION get_room_details(TEXT) TO authenticated;
 GRANT EXECUTE ON FUNCTION get_my_rooms() TO authenticated;
 GRANT EXECUTE ON FUNCTION is_room_valid(TEXT) TO authenticated;
+GRANT EXECUTE ON FUNCTION clear_votes(TEXT) TO authenticated;
