@@ -224,7 +224,10 @@ food/
 ### 方案 A：从高德地图 API
 1. 使用高德地图 "搜索周边" API
 2. 将结果转换为 shops 表格式
-3. 使用 Supabase Dashboard 或 CLI 批量导入
+3. 使用脚本批量导入（推荐）：`python3 data/import_shops_to_supabase.py --input source.json`
+   - 需要 `SUPABASE_SERVICE_ROLE_KEY`（或 `SUPABASE_KEY`）用于写入；`VITE_SUPABASE_URL` 会从 `frontend/.env.local` 自动读取
+   - 先试跑：`python3 data/import_shops_to_supabase.py --input source.json --dry-run`
+4. 或使用 Supabase Dashboard / CLI 批量导入
 
 ### 方案 B：手动导入
 ```sql

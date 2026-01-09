@@ -1,7 +1,10 @@
 import os
 import requests
 from supabase import create_client, Client
-
+from tqdm import tqdm
+from dotenv import load_dotenv
+# 加载环境变量
+load_dotenv()
 # ================= 配置 =================
 SUPABASE_URL = os.getenv("SUPABASE_URL", "")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY", "") 
@@ -18,12 +21,12 @@ def migrate_logos():
     print("开始获取所有店铺...")
     # 1. 获取所有带有 logo 的店铺
     # 假设你的高德图片是以 http 开头的，我们只处理没迁移过的
-    response = supabase.table("shops").select("id, gaode_id, logo").ilike("logo", "http%").execute()
+    response = supabase.table("shops").select("id, gaode_id, logo").ilike("logo", "http%").filter("logo", "not.ilike", "%supabase.co%").execute()
     shops = response.data
 
     print(f"找到 {len(shops)} 个店铺需要迁移图片。")
 
-    for shop in shops:
+    for shop in tqdm(shops):
         old_url = shop['logo']
         shop_id = shop['id']
         gaode_id = shop['gaode_id']
