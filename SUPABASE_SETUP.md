@@ -33,12 +33,12 @@
 在 Supabase Dashboard 中：
 
 1. 打开 **SQL Editor**
-2. 执行项目根目录的 `sql.sql` 文件中的所有 SQL
-   - 如果你之前已经执行过 `sql.sql`，但发现“解散房间”不生效，请再单独执行一次 `vote_rooms_update_policy.sql`（补齐 `vote_rooms` 的 UPDATE RLS 策略）
+2. 执行 `sql/init.sql` 文件中的所有 SQL
+   - 如果你之前执行过旧脚本（例如历史版本的 `sql.sql`），可以直接再次执行 `sql/init.sql` 来“补齐/修复”（脚本内部对关键字段和 RLS 做了兼容处理）
 3. 确认看到以下输出：
    - ✅ Extension `postgis` 已安装
-   - ✅ 3 个表已创建：`shops`, `vote_rooms`, `vote_records`
-   - ✅ 函数 `get_nearby_shops` 已创建
+   - ✅ 表已创建：`shops`, `vote_rooms`, `vote_records`, `user_locations`, `allowed_email_suffixes`
+   - ✅ 函数（RPC）已创建：`get_shops_with_tag_filters`, `get_all_tags`, `get_room_details`, `get_my_rooms`
    - ✅ Realtime 已启用
 
 ### 步骤 3: 导入餐厅数据（可选）
@@ -89,7 +89,7 @@ pnpm run dev
 
 另外本项目已去掉匿名访问（RLS 仅允许登录用户访问数据），并增加了“邮箱后缀白名单”：
 - 前端：通过 `VITE_ALLOWED_EMAIL_SUFFIX` 限制（见 `frontend/.env.local`）
-- 数据库：`sql.sql` 中创建了 `allowed_email_suffixes` 表作为白名单（请把默认的 `@example.com` 改成你的后缀）
+- 数据库：`sql/init.sql` 中创建了 `allowed_email_suffixes` 表作为白名单（请把默认的 `@example.com` 改成你的后缀）
 
 ## 🧪 测试功能
 
@@ -125,7 +125,7 @@ pnpm run dev
 
 ### 问题 2: "Error fetching nearby shops"
 **解决**:
-- 检查 Supabase SQL Editor 中是否执行了 `sql.sql`
+- 检查 Supabase SQL Editor 中是否执行了 `sql/init.sql`
 - 确认 `shops` 表中有数据
 - 检查 RLS 策略是否允许 SELECT
 

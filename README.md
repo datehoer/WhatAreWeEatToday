@@ -183,7 +183,9 @@ export interface Shop {
 
 ```
 food/
-├── sql.sql                    # 数据库结构定义
+├── sql/                       # 数据库脚本（Supabase SQL Editor 执行）
+│   ├── init.sql               # 初始化/修复一体脚本（推荐执行这个）
+│   └── legacy/                # 历史脚本存档（不建议新项目直接执行）
 ├── data/                      # 餐厅数据（如需要导入）
 ├── frontend/
 │   ├── App.tsx               # 主应用
@@ -200,7 +202,7 @@ food/
 
 ### 阶段 1：数据库准备
 - [ ] 在 Supabase 创建项目
-- [ ] 执行 `sql.sql` 创建表和函数
+- [ ] 执行 `sql/init.sql` 创建表/函数/RLS
 - [ ] 导入餐厅数据（从 `data/` 目录或 API）
 - [ ] 获取 Supabase URL 和 Anon Key
 
