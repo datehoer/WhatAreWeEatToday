@@ -1,0 +1,7 @@
+{
+  "name": "干饭决策助手",
+  "description": "解决多人聚餐选择困难症的实时投票工具。浏览附近美食，随机生成候选，创建房间邀请好友投票。",
+  "requestFramePermissions": [
+    "geolocation"
+  ]
+}

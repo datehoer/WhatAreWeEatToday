@@ -1,0 +1,66 @@
+# Dependencies
+node_modules/
+frontend/node_modules
+frontend/node_modules/.pnpm
+.pnpm-store/
+
+# Build outputs
+dist/
+dist-ssr/
+.vite/
+coverage/
+frontend/dist
+frontend/dist-ssr
+
+# Environment variables
+frontend/.env.local
+.env
+.env.*
+!.env.example
+!.env.sample
+!.env.template
+
+# Database files
+*.sqlite3
+*.db
+*.sqlite
+
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyd
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+venv/
+
+# Editor directories and files
+.vscode/*
+!.vscode/settings.json
+!.vscode/extensions.json
+!.vscode/launch.json
+!.vscode/tasks.json
+.idea
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# OS generated files
+Thumbs.db
+.Spotlight-V100
+.Trashes
+
+API_DOCS.json
