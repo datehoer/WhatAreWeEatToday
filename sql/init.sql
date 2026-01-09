@@ -168,6 +168,7 @@ $$;
 
 -- 支持多标签包含/排除的查询（前端实际使用）
 -- include_tags: 店铺标签至少命中其中一个；exclude_tags: 店铺标签不能命中其中任何一个
+-- name_query: 餐厅名称模糊搜索（不区分大小写）
 CREATE OR REPLACE FUNCTION get_shops_with_tag_filters(
   center_lat float,
   center_lng float,
@@ -175,7 +176,8 @@ CREATE OR REPLACE FUNCTION get_shops_with_tag_filters(
   offset_count int default 0,
   limit_count int default 50,
   include_tags text[] default null,
-  exclude_tags text[] default null
+  exclude_tags text[] default null,
+  name_query text default null
 )
 RETURNS TABLE (
   id bigint,
@@ -216,6 +218,10 @@ AS $$
         FROM unnest(string_to_array(coalesce(tag, ''), ';')) AS shop_tag
         WHERE TRIM(shop_tag) <> '' AND TRIM(shop_tag) = ANY(exclude_tags)
       )
+    )
+    AND (
+      name_query IS NULL
+      OR name ILIKE '%' || name_query || '%'
     )
   ORDER BY dist_meters ASC
   OFFSET offset_count
@@ -507,7 +513,7 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE vote_records TO authenticated;
 GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE user_locations TO authenticated;
 GRANT SELECT ON TABLE allowed_email_suffixes TO authenticated;
 
-GRANT EXECUTE ON FUNCTION get_shops_with_tag_filters(float, float, int, int, int, text[], text[]) TO authenticated;
+GRANT EXECUTE ON FUNCTION get_shops_with_tag_filters(float, float, int, int, int, text[], text[], text) TO authenticated;
 GRANT EXECUTE ON FUNCTION get_all_tags() TO authenticated;
 GRANT EXECUTE ON FUNCTION get_nearby_shops(float, float, int, int) TO authenticated;
 GRANT EXECUTE ON FUNCTION get_room_details(TEXT) TO authenticated;

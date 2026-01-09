@@ -22,11 +22,12 @@ const optimizeImageUrl = (url: string, quality = 30): string => {
 
 export const api = {
   /**
-   * 获取附近的餐厅（支持分页和标签过滤）
+   * 获取附近的餐厅（支持分页、标签过滤和名称搜索）
    * @param offset 偏移量（已加载的数量）
    * @param limit 每次加载的数量，默认 20
    * @param includeTags 包含的标签数组
    * @param excludeTags 排除的标签数组
+   * @param nameQuery 餐厅名称搜索关键词
    * @param centerLat 中心纬度（可选，默认使用配置的位置）
    * @param centerLng 中心经度（可选，默认使用配置的位置）
    * @param radiusMeters 搜索半径（可选，默认使用配置的半径）
@@ -37,6 +38,7 @@ export const api = {
     limit = 20,
     includeTags?: string[],
     excludeTags?: string[],
+    nameQuery?: string,
     centerLat?: number,
     centerLng?: number,
     radiusMeters?: number
@@ -49,7 +51,8 @@ export const api = {
         offset_count: offset,
         limit_count: limit,
         include_tags: includeTags && includeTags.length > 0 ? includeTags : null,
-        exclude_tags: excludeTags && excludeTags.length > 0 ? excludeTags : null
+        exclude_tags: excludeTags && excludeTags.length > 0 ? excludeTags : null,
+        name_query: nameQuery && nameQuery.trim() ? nameQuery.trim() : null
       })
 
     if (error) {

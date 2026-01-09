@@ -145,36 +145,27 @@ export default function App() {
   const [locating, setLocating] = useState(false);
   const [useDefaultConfig, setUseDefaultConfig] = useState(false); // 是否使用配置的默认位置
 
-  // 搜索过滤和排序
+  // 前端过滤和排序（名称搜索已移至后端）
   const filteredShops = useMemo(() => {
     let result = [...nearbyShops];
 
-    // 1. 搜索框过滤
-    if (searchQuery.trim()) {
-      const query = searchQuery.toLowerCase();
-      result = result.filter(shop =>
-        shop.name.toLowerCase().includes(query) ||
-        shop.tags.some(tag => tag.toLowerCase().includes(query))
-      );
-    }
-
-    // 2. 距离区间过滤
+    // 1. 距离区间过滤
     result = result.filter(shop => {
       return shop.distance >= filterState.minDistance && shop.distance <= filterState.maxDistance;
     });
 
-    // 3. 价格区间过滤
+    // 2. 价格区间过滤
     result = result.filter(shop => {
       const price = shop.avg_price || 0;
       return price >= filterState.minPrice && price <= filterState.maxPrice;
     });
 
-    // 4. 评分区间过滤
+    // 3. 评分区间过滤
     result = result.filter(shop => {
       return shop.rating >= filterState.minRating && shop.rating <= filterState.maxRating;
     });
 
-    // 5. 排序（使用副本避免修改原数组）
+    // 4. 排序（使用副本避免修改原数组）
     result = [...result].sort((a, b) => {
       switch (filterState.sortBy) {
         case 'distance':
@@ -191,7 +182,14 @@ export default function App() {
     });
 
     return result;
-  }, [nearbyShops, searchQuery, filterState]);
+  }, [nearbyShops, filterState]);
+
+  // 搜索查询的 ref，用于在 loadShops 中使用
+  const searchQueryRef = useRef(searchQuery);
+
+  useEffect(() => {
+    searchQueryRef.current = searchQuery;
+  }, [searchQuery]);
 
   // 加载餐厅数据的函数
   const loadShops = useCallback(async (resetPage = false) => {
@@ -208,12 +206,14 @@ export default function App() {
 
       const includeTagsArray = Array.from(includeTagsRef.current);
       const excludeTagsArray = Array.from(excludeTagsRef.current);
+      const currentSearchQuery = searchQueryRef.current;
 
       const data = await api.getNearbyShops(
         resetPage ? 0 : shopsCountRef.current,
         PAGE_SIZE,
         includeTagsArray.length > 0 ? includeTagsArray : undefined,
         excludeTagsArray.length > 0 ? excludeTagsArray : undefined,
+        currentSearchQuery.trim() || undefined,
         currentLocation.lat,
         currentLocation.lng,
         DEFAULT_LOCATION.radius
@@ -377,6 +377,17 @@ export default function App() {
 
     loadInitialData();
   }, [authLoading, authedUser, loadShops]);
+
+  // 3. 搜索查询变化时重新加载数据
+  useEffect(() => {
+    if (authLoading) return
+    if (!authedUser) return
+    // 防抖处理搜索输入
+    const timer = setTimeout(() => {
+      loadShops(true);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [searchQuery, authLoading, authedUser]);
 
   // 加载用户保存的位置
   useEffect(() => {
@@ -769,7 +780,8 @@ export default function App() {
        <div className="flex items-center justify-between text-sm font-bold text-gray-800 mt-2">
          <h2>附近热门</h2>
          <span className="text-gray-400 text-xs">
-           {searchQuery ? `找到 ${filteredShops.length} 家` : `已加载 ${nearbyShops.length} 家`}
+           {searchQuery ? `搜索结果 ${nearbyShops.length} 家` : `已加载 ${nearbyShops.length} 家`}
+           {!hasMore && nearbyShops.length > 0 && ' (已全部加载)'}
          </span>
        </div>
 
