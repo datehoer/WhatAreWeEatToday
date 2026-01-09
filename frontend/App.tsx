@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { api } from './services/supabaseApi';
+import { trackPageView, trackInteraction, trackBusiness, trackApi } from './services/analytics';
 import { Shop, Room, HomeTab, AppTab } from './types';
 import { ShopCard } from './components/ShopCard';
 import { CollapsibleFilterPanel, FilterState } from './components/FilterPanel';
@@ -219,6 +220,18 @@ export default function App() {
         DEFAULT_LOCATION.radius
       );
 
+      // 追踪 API 调用
+      if (resetPage) {
+        const hasSearch = !!currentSearchQuery?.trim();
+        const hasTags = includeTagsArray.length > 0 || excludeTagsArray.length > 0;
+        trackApi.loadShops(data.length, hasSearch, hasTags);
+        if (hasSearch) {
+          trackApi.search(currentSearchQuery.trim());
+        }
+      } else {
+        trackApi.loadMore(data.length);
+      }
+
       if (resetPage) {
         setNearbyShops(data);
         shopsCountRef.current = data.length;
@@ -256,12 +269,14 @@ export default function App() {
       // 包含 -> 排除
       nextInclude.delete(tag);
       nextExclude.add(tag);
+      trackInteraction.tagExclude(tag);
     } else if (nextExclude.has(tag)) {
       // 排除 -> 默认
       nextExclude.delete(tag);
     } else {
       // 默认 -> 包含
       nextInclude.add(tag);
+      trackInteraction.tagInclude(tag);
     }
 
     includeTagsRef.current = nextInclude;
@@ -282,6 +297,7 @@ export default function App() {
     setExcludeTags(nextExclude);
     // 清除后重新加载数据
     loadShops(true);
+    trackInteraction.tagClear();
   };
 
   // 筛选器处理函数
@@ -373,6 +389,8 @@ export default function App() {
       ]);
 
       setAllTags(tagsData);
+      // 追踪标签加载
+      trackApi.getTags(tagsData.length);
     };
 
     loadInitialData();
@@ -415,6 +433,25 @@ export default function App() {
 
     return () => clearInterval(interval)
   }, [activeTab])
+
+  // 页面浏览追踪
+  useEffect(() => {
+    if (!authedUser) return
+    switch (activeTab) {
+      case 'home':
+        trackPageView.home();
+        break;
+      case 'vote':
+        trackPageView.vote();
+        break;
+      case 'rooms':
+        trackPageView.rooms();
+        break;
+      case 'me':
+        trackPageView.me();
+        break;
+    }
+  }, [activeTab, authedUser])
 
   // 位置管理处理函数
   const handleGetCurrentLocation = async () => {
@@ -472,6 +509,7 @@ export default function App() {
     })
     setLocationName(location.name)
     setUseDefaultConfig(false)
+    trackInteraction.locationChange(location.name)
     showToast(`已切换到：${location.name}`)
   }
 
@@ -612,6 +650,9 @@ export default function App() {
       const code = await api.createRoom(candidates, roomExpiryMinutes, roomNameInput.trim() || undefined)
       showToast('房间创建成功')
 
+      // 追踪房间创建事件
+      trackBusiness.roomCreate(candidates.length, roomExpiryMinutes)
+
       // 关闭弹窗并清空输入
       setRoomConfigModalOpen(false)
       setRoomNameInput('')
@@ -633,6 +674,9 @@ export default function App() {
     try {
       await api.dismissRoom(currentRoomCode)
       showToast('房间已解散')
+
+      // 追踪房间解散事件
+      trackBusiness.roomDismiss(currentRoomCode)
 
       // 重新加载房间列表
       await loadMyRooms()
@@ -664,6 +708,7 @@ export default function App() {
 
   // 进入房间
   const handleEnterRoom = (roomCode: string) => {
+    trackBusiness.roomEnter(roomCode)
     window.location.hash = `#room/${roomCode}`
   };
 
@@ -679,10 +724,12 @@ export default function App() {
     if (myVote?.shop_id === shopId) {
       updatedRoom = await api.cancelVote(currentRoomCode, myVote.voter_id);
       showToast('已取消投票');
+      trackBusiness.voteCancel(currentRoomCode)
     } else {
       // 否则投票给这个餐厅
       updatedRoom = await api.castVote(currentRoomCode, authedUser!.id, shopId);
       showToast('投票成功！');
+      trackBusiness.voteCast(currentRoomCode, shopId)
     }
 
     // 立即更新本地状态
@@ -703,16 +750,21 @@ export default function App() {
     const exists = selectedShops.find(s => s.id === shop.id);
     if (exists) {
       setSelectedShops(prev => prev.filter(s => s.id !== shop.id));
+      trackBusiness.shopDeselect(shop.id)
     } else {
       if (selectedShops.length >= 5) {
         showToast('最多只能选 5 个哦');
         return;
       }
       setSelectedShops(prev => [...prev, shop]);
+      trackBusiness.shopSelect(shop.name)
     }
   };
 
   const handleExitRoom = () => {
+    if (currentRoomCode) {
+      trackBusiness.roomExit(currentRoomCode)
+    }
     window.location.hash = '';
     setCurrentRoomCode(null);
     setRoomData(null);
