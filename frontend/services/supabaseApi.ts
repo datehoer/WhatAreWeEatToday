@@ -551,5 +551,49 @@ export const api = {
       candidates_count: room.candidates_count,
       votes_count: room.votes_count
     }))
+  },
+
+  /**
+   * 添加候选店铺到房间（所有认证用户可操作）
+   * @param roomCode 房间代码
+   * @param shopId 店铺 ID
+   * @returns 是否已存在（true 表示店铺已存在）
+   */
+  addCandidate: async (roomCode: string, shopId: string): Promise<{ alreadyExists: boolean }> => {
+    const { data, error } = await supabase.rpc('add_room_candidate', {
+      room_code_param: roomCode,
+      shop_id_param: parseInt(shopId)
+    })
+
+    if (error) {
+      console.error('Error adding candidate:', error)
+      throw error
+    }
+
+    return {
+      alreadyExists: (data as any)?.already_exists ?? false
+    }
+  },
+
+  /**
+   * 从房间删除候选店铺（所有认证用户可操作）
+   * @param roomCode 房间代码
+   * @param shopId 店铺 ID
+   * @returns 是否已存在（false 表示店铺原本就不在列表中）
+   */
+  removeCandidate: async (roomCode: string, shopId: string): Promise<{ candidateExisted: boolean }> => {
+    const { data, error } = await supabase.rpc('remove_room_candidate', {
+      room_code_param: roomCode,
+      shop_id_param: parseInt(shopId)
+    })
+
+    if (error) {
+      console.error('Error removing candidate:', error)
+      throw error
+    }
+
+    return {
+      candidateExisted: (data as any)?.candidate_existed ?? false
+    }
   }
 }

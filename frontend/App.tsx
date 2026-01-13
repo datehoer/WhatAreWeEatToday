@@ -361,6 +361,10 @@ export default function App() {
   // Room State (Vote Tab)
   const [roomData, setRoomData] = useState<Room | null>(null);
   const [hasCopied, setHasCopied] = useState(false);
+  const [addShopModalOpen, setAddShopModalOpen] = useState(false); // 添加店铺弹窗
+  const [shopSearchQuery, setShopSearchQuery] = useState(''); // 店铺搜索查询
+  const [selectedShopToAdd, setSelectedShopToAdd] = useState<Shop | null>(null); // 选中的店铺
+  const [addingShop, setAddingShop] = useState(false); // 正在添加店铺
 
   // --- Effects ---
 
@@ -803,6 +807,64 @@ export default function App() {
     }
   };
 
+  // 添加候选店铺到房间
+  const handleAddCandidate = async (shop: Shop) => {
+    if (!currentRoomCode) return;
+
+    setAddingShop(true);
+    try {
+      const result = await api.addCandidate(currentRoomCode, shop.id);
+
+      if (result.alreadyExists) {
+        showToast('该店铺已在候选列表中');
+      } else {
+        showToast('店铺已添加');
+
+        // 重新获取房间数据
+        const updatedRoom = await api.getRoom(currentRoomCode);
+        if (updatedRoom) {
+          setRoomData(updatedRoom);
+        }
+
+        // 关闭弹窗并重置状态
+        setAddShopModalOpen(false);
+        setShopSearchQuery('');
+        setSelectedShopToAdd(null);
+      }
+    } catch (error: any) {
+      showToast(error?.message || '添加失败');
+    } finally {
+      setAddingShop(false);
+    }
+  };
+
+  // 从房间删除候选店铺
+  const handleRemoveCandidate = async (shopId: string) => {
+    if (!currentRoomCode) return;
+
+    if (!confirm('确定要从候选列表中删除这个店铺吗？')) {
+      return;
+    }
+
+    try {
+      const result = await api.removeCandidate(currentRoomCode, shopId);
+
+      if (!result.candidateExisted) {
+        showToast('店铺不存在于候选列表中');
+      } else {
+        showToast('店铺已删除');
+
+        // 重新获取房间数据
+        const updatedRoom = await api.getRoom(currentRoomCode);
+        if (updatedRoom) {
+          setRoomData(updatedRoom);
+        }
+      }
+    } catch (error: any) {
+      showToast(error?.message || '删除失败');
+    }
+  };
+
   const copyLink = () => {
     const url = window.location.href;
     navigator.clipboard.writeText(url);
@@ -1056,20 +1118,37 @@ export default function App() {
           <div>
             <div className="flex justify-between items-end mb-3 px-1">
               <h2 className="font-bold text-gray-800 text-lg">候选餐厅</h2>
-              <span className="text-xs text-gray-500 font-medium bg-gray-200 px-2 py-1 rounded-full">共 {totalVotes} 票</span>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setAddShopModalOpen(true)}
+                  className="text-xs bg-orange-500 text-white px-3 py-1 rounded-full font-medium flex items-center gap-1 hover:bg-orange-600"
+                >
+                  <Plus size={12} />
+                  添加店铺
+                </button>
+                <span className="text-xs text-gray-500 font-medium bg-gray-200 px-2 py-1 rounded-full">共 {totalVotes} 票</span>
+              </div>
             </div>
             <div className="space-y-3">
               {roomData.candidates.map(shop => (
-                <ShopCard
-                  key={shop.id}
-                  shop={shop}
-                  mode="vote"
-                  voteCount={voteCounts[shop.id]}
-                  totalVotes={totalVotes}
-                  hasVotedForThis={myVote?.shop_id === shop.id}
-                  onVote={handleVote}
-                  voters={shopVoters[shop.id] || []}
-                />
+                <div key={shop.id} className="relative">
+                  <button
+                    onClick={() => handleRemoveCandidate(shop.id)}
+                    className="absolute -top-2 -right-2 z-10 w-8 h-8 bg-red-500 text-white rounded-full shadow-lg flex items-center justify-center hover:bg-red-600 transition-colors"
+                    title="删除此店铺"
+                  >
+                    <X size={14} />
+                  </button>
+                  <ShopCard
+                    shop={shop}
+                    mode="vote"
+                    voteCount={voteCounts[shop.id]}
+                    totalVotes={totalVotes}
+                    hasVotedForThis={myVote?.shop_id === shop.id}
+                    onVote={handleVote}
+                    voters={shopVoters[shop.id] || []}
+                  />
+                </div>
               ))}
             </div>
           </div>
@@ -1810,6 +1889,138 @@ export default function App() {
                 className="flex-1 py-3 bg-gradient-to-r from-orange-500 to-red-500 text-white rounded-xl font-bold hover:from-orange-600 hover:to-red-600 transition-all shadow-lg shadow-orange-500/30"
               >
                 创建房间
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 添加店铺弹窗 */}
+      {addShopModalOpen && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl w-full max-w-sm max-h-[80vh] flex flex-col">
+            <div className="p-6 border-b border-gray-100">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-bold text-gray-800">添加候选店铺</h3>
+                <button
+                  onClick={() => {
+                    setAddShopModalOpen(false);
+                    setShopSearchQuery('');
+                    setSelectedShopToAdd(null);
+                  }}
+                  className="text-gray-400 hover:text-gray-600"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+
+              {/* 搜索框 */}
+              <div className="relative">
+                <Search className="absolute left-3 top-3.5 text-gray-400 w-4 h-4" />
+                <input
+                  type="text"
+                  placeholder="搜索餐厅名称或标签..."
+                  value={shopSearchQuery}
+                  onChange={(e) => setShopSearchQuery(e.target.value)}
+                  className="w-full bg-gray-50 border border-gray-200 rounded-xl py-3 px-4 pl-10 pr-10 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
+                />
+                {shopSearchQuery && (
+                  <button
+                    onClick={() => setShopSearchQuery('')}
+                    className="absolute right-3 top-3.5 text-gray-400 hover:text-gray-600"
+                  >
+                    <X size={16} />
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* 店铺列表 */}
+            <div className="flex-1 overflow-y-auto p-4">
+              <div className="space-y-3">
+                {/* 从附近餐厅搜索，排除已添加的店铺 */}
+                {nearbyShops
+                  .filter(shop => {
+                    // 搜索过滤
+                    const matchesSearch = !shopSearchQuery.trim() ||
+                      shop.name.toLowerCase().includes(shopSearchQuery.toLowerCase()) ||
+                      shop.tags.some(tag => tag.toLowerCase().includes(shopSearchQuery.toLowerCase()));
+                    // 排除已添加的店铺
+                    const alreadyAdded = roomData?.candidates.some(c => c.id === shop.id);
+                    return matchesSearch && !alreadyAdded;
+                  })
+                  .slice(0, 10)
+                  .map(shop => (
+                      <div
+                        key={shop.id}
+                        onClick={() => setSelectedShopToAdd(shop)}
+                        className={`p-3 rounded-xl cursor-pointer transition-colors ${
+                          selectedShopToAdd?.id === shop.id
+                            ? 'bg-orange-50 border-2 border-orange-500'
+                            : 'bg-gray-50 hover:bg-gray-100 border-2 border-transparent'
+                        }`}
+                      >
+                        <div className="flex items-center gap-3">
+                          <img
+                            src={shop.image_url}
+                            alt={shop.name}
+                            className="w-12 h-12 rounded-lg object-cover bg-gray-200"
+                          />
+                          <div className="flex-1 min-w-0">
+                            <div className="font-medium text-gray-800 text-sm truncate">{shop.name}</div>
+                            <div className="text-xs text-gray-500 mt-1 flex items-center gap-2">
+                              {shop.rating > 0 && (
+                                <span className="flex items-center gap-1">
+                                  <Star size={10} className="text-yellow-500 fill-yellow-500" />
+                                  {shop.rating.toFixed(1)}
+                                </span>
+                              )}
+                              <span className="text-orange-600">{Math.floor(shop.distance)}m</span>
+                            </div>
+                          </div>
+                          {selectedShopToAdd?.id === shop.id && (
+                            <CheckCircle2 size={20} className="text-orange-500 flex-shrink-0" />
+                          )}
+                        </div>
+                      </div>
+                    ))}
+
+                {nearbyShops.filter(shop => {
+                  const matchesSearch = !shopSearchQuery.trim() ||
+                    shop.name.toLowerCase().includes(shopSearchQuery.toLowerCase()) ||
+                    shop.tags.some(tag => tag.toLowerCase().includes(shopSearchQuery.toLowerCase()));
+                  const alreadyAdded = roomData?.candidates.some(c => c.id === shop.id);
+                  return matchesSearch && !alreadyAdded;
+                }).length === 0 && (
+                  <div className="text-center py-8 text-gray-400">
+                    <p className="text-sm">没有找到相关店铺</p>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* 底部操作按钮 */}
+            <div className="p-4 border-t border-gray-100">
+              <button
+                onClick={() => selectedShopToAdd && handleAddCandidate(selectedShopToAdd)}
+                disabled={!selectedShopToAdd || addingShop}
+                className={`w-full py-3 rounded-xl font-bold flex items-center justify-center gap-2 transition-colors ${
+                  selectedShopToAdd && !addingShop
+                    ? 'bg-gradient-to-r from-orange-500 to-red-500 text-white shadow-lg shadow-orange-500/30'
+                    : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                }`}
+              >
+                {addingShop ? (
+                  <>
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                    添加中...
+                  </>
+                ) : (
+                  <>
+                    <Plus size={18} />
+                    添加到候选列表
+                  </>
+                )}
               </button>
             </div>
           </div>

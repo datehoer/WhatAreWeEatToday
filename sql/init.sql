@@ -387,6 +387,193 @@ BEGIN
 END;
 $$;
 
+-- 添加候选店铺到房间（所有认证用户可操作）
+CREATE OR REPLACE FUNCTION add_room_candidate(
+  room_code_param TEXT,
+  shop_id_param BIGINT
+)
+RETURNS JSON
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  room_is_active BOOLEAN;
+  room_expires_at TIMESTAMP WITH TIME ZONE;
+  room_candidates JSONB;
+  shop_data RECORD;
+  new_candidates JSONB;
+  candidate_exists BOOLEAN;
+BEGIN
+  IF NOT is_allowed_email() THEN
+    RAISE EXCEPTION 'not allowed' USING ERRCODE = '28000';
+  END IF;
+
+  -- 检查房间存在并获取信息
+  SELECT is_active, expires_at, candidates
+  INTO room_is_active, room_expires_at, room_candidates
+  FROM vote_rooms
+  WHERE room_code = room_code_param;
+
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'room not found' USING ERRCODE = '42704';
+  END IF;
+
+  -- 检查房间是否有效
+  IF COALESCE(room_is_active, true) = FALSE THEN
+    RAISE EXCEPTION 'room is not active' USING ERRCODE = '42501';
+  END IF;
+
+  IF room_expires_at IS NOT NULL AND room_expires_at < timezone('utc'::text, now()) THEN
+    RAISE EXCEPTION 'room has expired' USING ERRCODE = '42501';
+  END IF;
+
+  -- 检查店铺是否已在候选列表中
+  SELECT EXISTS(
+    SELECT 1
+    FROM jsonb_array_elements(room_candidates) AS candidate
+    WHERE candidate->>'id' = shop_id_param::text
+  )
+  INTO candidate_exists;
+
+  IF candidate_exists THEN
+    -- 店铺已存在，直接返回当前房间数据
+    RETURN json_build_object(
+      'room_code', room_code_param,
+      'candidates', room_candidates,
+      'already_exists', true
+    );
+  END IF;
+
+  -- 从 shops 表获取店铺信息
+  SELECT
+    id,
+    name,
+    rating,
+    avg_price,
+    tag,
+    logo,
+    deepinfo
+  INTO shop_data
+  FROM shops
+  WHERE id = shop_id_param;
+
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'shop not found' USING ERRCODE = '42704';
+  END IF;
+
+  -- 构建新的候选店铺 JSONB
+  new_candidates := room_candidates || jsonb_build_object(
+    'id', shop_data.id,
+    'name', shop_data.name,
+    'logo', shop_data.logo,
+    'distance', 0,
+    'rating', COALESCE(shop_data.rating, 0),
+    'avg_price', COALESCE(shop_data.avg_price, 0),
+    'tags', ARRAY(
+      SELECT TRIM(unnest_value)
+      FROM unnest(string_to_array(coalesce(shop_data.tag, ''), ';'))
+      WHERE TRIM(unnest_value) <> ''
+    ),
+    'deepinfo', COALESCE(shop_data.deepinfo, '[]'),
+    'vote_count', 0
+  );
+
+  -- 更新房间的候选列表
+  UPDATE vote_rooms
+  SET candidates = new_candidates
+  WHERE room_code = room_code_param;
+
+  RETURN json_build_object(
+    'room_code', room_code_param,
+    'candidates', new_candidates,
+    'already_exists', false
+  );
+END;
+$$;
+
+-- 从房间删除候选店铺（所有认证用户可操作）
+CREATE OR REPLACE FUNCTION remove_room_candidate(
+  room_code_param TEXT,
+  shop_id_param BIGINT
+)
+RETURNS JSON
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  room_is_active BOOLEAN;
+  room_expires_at TIMESTAMP WITH TIME ZONE;
+  room_candidates JSONB;
+  new_candidates JSONB;
+  candidate_existed BOOLEAN;
+BEGIN
+  IF NOT is_allowed_email() THEN
+    RAISE EXCEPTION 'not allowed' USING ERRCODE = '28000';
+  END IF;
+
+  -- 检查房间存在并获取信息
+  SELECT is_active, expires_at, candidates
+  INTO room_is_active, room_expires_at, room_candidates
+  FROM vote_rooms
+  WHERE room_code = room_code_param;
+
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'room not found' USING ERRCODE = '42704';
+  END IF;
+
+  -- 检查房间是否有效
+  IF COALESCE(room_is_active, true) = FALSE THEN
+    RAISE EXCEPTION 'room is not active' USING ERRCODE = '42501';
+  END IF;
+
+  IF room_expires_at IS NOT NULL AND room_expires_at < timezone('utc'::text, now()) THEN
+    RAISE EXCEPTION 'room has expired' USING ERRCODE = '42501';
+  END IF;
+
+  -- 检查店铺是否在候选列表中
+  SELECT EXISTS(
+    SELECT 1
+    FROM jsonb_array_elements(room_candidates) AS candidate
+    WHERE candidate->>'id' = shop_id_param::text
+  )
+  INTO candidate_existed;
+
+  IF NOT candidate_existed THEN
+    -- 店铺不存在，直接返回
+    RETURN json_build_object(
+      'room_code', room_code_param,
+      'candidates', room_candidates,
+      'candidate_existed', false
+    );
+  END IF;
+
+  -- 从候选列表中移除指定店铺
+  new_candidates := (
+    SELECT jsonb_agg(candidate)
+    FROM jsonb_array_elements(room_candidates) AS candidate
+    WHERE candidate->>'id' != shop_id_param::text
+  );
+
+  -- 更新房间的候选列表
+  UPDATE vote_rooms
+  SET candidates = COALESCE(new_candidates, '[]'::jsonb)
+  WHERE room_code = room_code_param;
+
+  -- 删除该店铺相关的投票记录
+  DELETE FROM vote_records
+  WHERE room_code = room_code_param
+    AND shop_id = shop_id_param;
+
+  RETURN json_build_object(
+    'room_code', room_code_param,
+    'candidates', COALESCE(new_candidates, '[]'::jsonb),
+    'candidate_existed', true
+  );
+END;
+$$;
+
 -- user_locations: 自动更新 updated_at
 CREATE OR REPLACE FUNCTION update_updated_at_column()
 RETURNS TRIGGER
@@ -557,3 +744,5 @@ GRANT EXECUTE ON FUNCTION get_room_details(TEXT) TO authenticated;
 GRANT EXECUTE ON FUNCTION get_my_rooms() TO authenticated;
 GRANT EXECUTE ON FUNCTION is_room_valid(TEXT) TO authenticated;
 GRANT EXECUTE ON FUNCTION clear_votes(TEXT) TO authenticated;
+GRANT EXECUTE ON FUNCTION add_room_candidate(TEXT, BIGINT) TO authenticated;
+GRANT EXECUTE ON FUNCTION remove_room_candidate(TEXT, BIGINT) TO authenticated;
