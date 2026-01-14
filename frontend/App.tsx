@@ -1131,32 +1131,17 @@ export default function App() {
             </div>
             <div className="space-y-3">
               {roomData.candidates.map(shop => (
-                <div key={shop.id} className="relative pr-6">
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleRemoveCandidate(shop.id);
-                    }}
-                    className="absolute top-2 right-2 z-20 w-7 h-7 bg-red-500 text-white rounded-lg shadow-md flex items-center justify-center hover:bg-red-600 transition-colors"
-                    title="删除此店铺"
-                  >
-                    <Trash2 size={14} />
-                  </button>
-                  <div
-                    onClick={() => handleVote(shop.id)}
-                    className="cursor-pointer"
-                  >
-                    <ShopCard
-                      shop={shop}
-                      mode="vote"
-                      voteCount={voteCounts[shop.id]}
-                      totalVotes={totalVotes}
-                      hasVotedForThis={myVote?.shop_id === shop.id}
-                      onVote={handleVote}
-                      voters={shopVoters[shop.id] || []}
-                    />
-                  </div>
-                </div>
+                <ShopCard
+                  key={shop.id}
+                  shop={shop}
+                  mode="vote"
+                  voteCount={voteCounts[shop.id]}
+                  totalVotes={totalVotes}
+                  hasVotedForThis={myVote?.shop_id === shop.id}
+                  onVote={handleVote}
+                  voters={shopVoters[shop.id] || []}
+                  onRemove={handleRemoveCandidate}
+                />
               ))}
             </div>
           </div>
