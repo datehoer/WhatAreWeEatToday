@@ -365,6 +365,8 @@ export default function App() {
   const [shopSearchQuery, setShopSearchQuery] = useState(''); // 店铺搜索查询
   const [selectedShopToAdd, setSelectedShopToAdd] = useState<Shop | null>(null); // 选中的店铺
   const [addingShop, setAddingShop] = useState(false); // 正在添加店铺
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false); // 删除确认弹窗
+  const [shopToDelete, setShopToDelete] = useState<{ id: string; name: string } | null>(null); // 待删除的店铺
 
   // --- Effects ---
 
@@ -838,16 +840,26 @@ export default function App() {
     }
   };
 
-  // 从房间删除候选店铺
-  const handleRemoveCandidate = async (shopId: string) => {
+  // 从房间删除候选店铺 - 打开确认弹窗
+  const handleRemoveCandidate = (shopId: string) => {
     if (!currentRoomCode) return;
 
-    if (!confirm('确定要从候选列表中删除这个店铺吗？')) {
-      return;
+    // 查找店铺信息
+    const shop = roomData?.candidates.find(c => c.id === shopId);
+    if (shop) {
+      setShopToDelete({ id: shopId, name: shop.name });
+      setDeleteConfirmOpen(true);
     }
+  };
+
+  // 确认删除店铺
+  const confirmRemoveCandidate = async () => {
+    if (!currentRoomCode || !shopToDelete) return;
+
+    setDeleteConfirmOpen(false);
 
     try {
-      const result = await api.removeCandidate(currentRoomCode, shopId);
+      const result = await api.removeCandidate(currentRoomCode, shopToDelete.id);
 
       if (!result.candidateExisted) {
         showToast('店铺不存在于候选列表中');
@@ -862,7 +874,15 @@ export default function App() {
       }
     } catch (error: any) {
       showToast(error?.message || '删除失败');
+    } finally {
+      setShopToDelete(null);
     }
+  };
+
+  // 取消删除
+  const cancelRemoveCandidate = () => {
+    setDeleteConfirmOpen(false);
+    setShopToDelete(null);
   };
 
   const copyLink = () => {
@@ -2014,6 +2034,44 @@ export default function App() {
                     添加到候选列表
                   </>
                 )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 删除确认弹窗 */}
+      {deleteConfirmOpen && shopToDelete && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl w-full max-w-sm p-6 space-y-5">
+            {/* 图标 */}
+            <div className="flex justify-center">
+              <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center">
+                <Trash2 size={32} className="text-red-500" />
+              </div>
+            </div>
+
+            {/* 标题和描述 */}
+            <div className="text-center space-y-2">
+              <h3 className="text-xl font-bold text-gray-800">确认删除店铺</h3>
+              <p className="text-gray-600">
+                确定要从候选列表中删除 <span className="font-bold text-gray-800">{shopToDelete.name}</span> 吗？
+              </p>
+            </div>
+
+            {/* 操作按钮 */}
+            <div className="flex gap-3 pt-2">
+              <button
+                onClick={cancelRemoveCandidate}
+                className="flex-1 py-3 bg-gray-100 text-gray-700 rounded-xl font-medium hover:bg-gray-200 transition-colors"
+              >
+                取消
+              </button>
+              <button
+                onClick={confirmRemoveCandidate}
+                className="flex-1 py-3 bg-red-500 text-white rounded-xl font-bold hover:bg-red-600 transition-colors"
+              >
+                确认删除
               </button>
             </div>
           </div>
