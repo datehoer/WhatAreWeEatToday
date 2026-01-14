@@ -471,9 +471,9 @@ BEGIN
     'rating', COALESCE(shop_data.rating, 0),
     'avg_price', COALESCE(shop_data.avg_price, 0),
     'tags', ARRAY(
-      SELECT TRIM(unnest_value)
-      FROM unnest(string_to_array(coalesce(shop_data.tag, ''), ';'))
-      WHERE TRIM(unnest_value) <> ''
+      SELECT TRIM(tag_item)
+      FROM unnest(string_to_array(coalesce(shop_data.tag, ''), ';')) AS tag_item
+      WHERE TRIM(tag_item) <> ''
     ),
     'deepinfo', COALESCE(shop_data.deepinfo, '[]'),
     'vote_count', 0
