@@ -367,6 +367,8 @@ export default function App() {
   const [addingShop, setAddingShop] = useState(false); // 正在添加店铺
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false); // 删除确认弹窗
   const [shopToDelete, setShopToDelete] = useState<{ id: string; name: string } | null>(null); // 待删除的店铺
+  const [randomPickModalOpen, setRandomPickModalOpen] = useState(false); // 随机选择弹窗
+  const [randomPickResult, setRandomPickResult] = useState<Shop | null>(null); // 随机选择结果
 
   // --- Effects ---
 
@@ -749,7 +751,7 @@ export default function App() {
 
   const handleRandomize = () => {
     const shuffled = [...nearbyShops].sort(() => 0.5 - Math.random());
-    setRandomCandidates(shuffled.slice(0, 5));
+    setRandomCandidates(shuffled);
   };
 
   // 加载房间列表
@@ -885,6 +887,17 @@ export default function App() {
     setShopToDelete(null);
   };
 
+  // 随机选择店铺
+  const handleRandomPick = () => {
+    if (!roomData || roomData.candidates.length === 0) {
+      showToast('没有候选店铺可以随机选择');
+      return;
+    }
+    const randomIndex = Math.floor(Math.random() * roomData.candidates.length);
+    setRandomPickResult(roomData.candidates[randomIndex]);
+    setRandomPickModalOpen(true);
+  };
+
   const copyLink = () => {
     const url = window.location.href;
     navigator.clipboard.writeText(url);
@@ -899,10 +912,6 @@ export default function App() {
       setSelectedShops(prev => prev.filter(s => s.id !== shop.id));
       trackBusiness.shopDeselect(shop.id)
     } else {
-      if (selectedShops.length >= 5) {
-        showToast('最多只能选 5 个哦');
-        return;
-      }
       setSelectedShops(prev => [...prev, shop]);
       trackBusiness.shopSelect(shop.name)
     }
@@ -1139,6 +1148,13 @@ export default function App() {
             <div className="flex justify-between items-end mb-3 px-1">
               <h2 className="font-bold text-gray-800 text-lg">候选餐厅</h2>
               <div className="flex items-center gap-2">
+                <button
+                  onClick={handleRandomPick}
+                  className="text-xs bg-purple-500 text-white px-3 py-1 rounded-full font-medium flex items-center gap-1 hover:bg-purple-600"
+                >
+                  <Shuffle size={12} />
+                  随机选择
+                </button>
                 <button
                   onClick={() => setAddShopModalOpen(true)}
                   className="text-xs bg-orange-500 text-white px-3 py-1 rounded-full font-medium flex items-center gap-1 hover:bg-orange-600"
@@ -2072,6 +2088,74 @@ export default function App() {
                 className="flex-1 py-3 bg-red-500 text-white rounded-xl font-bold hover:bg-red-600 transition-colors"
               >
                 确认删除
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 随机选择弹窗 */}
+      {randomPickModalOpen && randomPickResult && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl w-full max-w-sm p-6 space-y-5">
+            {/* 图标 */}
+            <div className="flex justify-center">
+              <div className="w-20 h-20 bg-purple-100 rounded-full flex items-center justify-center">
+                <Shuffle size={40} className="text-purple-500" />
+              </div>
+            </div>
+
+            {/* 标题 */}
+            <div className="text-center space-y-2">
+              <h3 className="text-xl font-bold text-gray-800">命运的选择</h3>
+              <p className="text-gray-600 text-sm">今天吃这个！</p>
+            </div>
+
+            {/* 选中店铺 */}
+            <div className="bg-gradient-to-br from-purple-50 to-orange-50 rounded-xl p-4 space-y-3">
+              <div className="flex items-center gap-4">
+                <img
+                  src={randomPickResult.logo || randomPickResult.image_url}
+                  alt={randomPickResult.name}
+                  className="w-16 h-16 rounded-lg object-cover bg-gray-200"
+                />
+                <div className="flex-1">
+                  <h4 className="font-bold text-gray-800 text-lg">{randomPickResult.name}</h4>
+                  {randomPickResult.rating > 0 && (
+                    <div className="flex items-center gap-1 text-sm text-gray-600 mt-1">
+                      <Star size={14} className="text-yellow-500 fill-yellow-500" />
+                      {randomPickResult.rating.toFixed(1)}
+                    </div>
+                  )}
+                </div>
+              </div>
+              {randomPickResult.tags && randomPickResult.tags.length > 0 && (
+                <div className="flex flex-wrap gap-2">
+                  {randomPickResult.tags.slice(0, 3).map(tag => (
+                    <span key={tag} className="text-xs bg-white px-2 py-1 rounded-full text-gray-600">
+                      {tag}
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* 操作按钮 */}
+            <div className="flex gap-3 pt-2">
+              <button
+                onClick={() => setRandomPickModalOpen(false)}
+                className="flex-1 py-3 bg-gray-100 text-gray-700 rounded-xl font-medium hover:bg-gray-200 transition-colors"
+              >
+                关闭
+              </button>
+              <button
+                onClick={() => {
+                  setRandomPickModalOpen(false);
+                  handleVote(randomPickResult.id);
+                }}
+                className="flex-1 py-3 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-xl font-bold hover:from-purple-600 hover:to-pink-600 transition-colors"
+              >
+                就它了！
               </button>
             </div>
           </div>
